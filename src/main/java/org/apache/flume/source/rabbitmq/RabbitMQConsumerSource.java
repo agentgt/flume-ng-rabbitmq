@@ -36,6 +36,7 @@ public class RabbitMQConsumerSource extends AbstractSource implements EventDrive
 //    private String _ExchangeName;
 //    private String[] _Topics;
     private MyConsumer consumer;
+    private int prefetch = 0;
     
     @Override
     public void configure(Context context) {
@@ -43,7 +44,7 @@ public class RabbitMQConsumerSource extends AbstractSource implements EventDrive
         _QueueName = RabbitMQUtil.getQueueName(context);  
 //        _ExchangeName = RabbitMQUtil.getExchangeName(context);
 //        _Topics = RabbitMQUtil.getTopics(context);
-        
+        prefetch = RabbitMQUtil.getPrefetch(context);
         ensureConfigCompleteness( context );
     }
     
@@ -58,6 +59,7 @@ public class RabbitMQConsumerSource extends AbstractSource implements EventDrive
 		try {
 			Connection connection = _ConnectionFactory.newConnection();
 			Channel channel = connection.createChannel();
+			channel.basicQos(prefetch);
             if(log.isInfoEnabled())
             	log.info(this.getName() + " - Opening connection to " + _ConnectionFactory.getHost() + ":" + _ConnectionFactory.getPort());
 			consumer = new MyConsumer(connection,channel,_QueueName) {

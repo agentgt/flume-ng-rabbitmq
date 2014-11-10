@@ -52,13 +52,17 @@ public class RabbitMQUtil {
         if(null!=rabbitmqHeaders){
             for(Map.Entry<String, Object> kvp:rabbitmqHeaders.entrySet()){
                 if(!headers.containsKey(kvp.getKey())&&null!=kvp.getValue()){
-                    if(log.isInfoEnabled())log.info("header=" + kvp.getKey() + " value=" + kvp.getValue());
+                    if(log.isDebugEnabled())log.debug("header=" + kvp.getKey() + " value=" + kvp.getValue());
                     headers.put(kvp.getKey(), kvp.getValue().toString());
                 }
             }
         }
         
         return headers;
+    }
+    
+    public static int getPrefetch(Context context) {
+    	return context.getInteger(RabbitMQConstants.CONFIG_PREFETCH, 0);
     }
     
     public static String getQueueName(Context context) {
