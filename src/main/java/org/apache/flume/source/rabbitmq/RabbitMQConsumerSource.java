@@ -1,6 +1,11 @@
 package org.apache.flume.source.rabbitmq;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CharsetEncoder;
+import java.nio.charset.CodingErrorAction;
 import java.util.Map;
 
 import org.apache.commons.lang.StringUtils;
@@ -16,6 +21,7 @@ import org.apache.flume.source.AbstractSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Charsets;
 import com.rabbitmq.client.AMQP.BasicProperties;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -81,6 +87,34 @@ public class RabbitMQConsumerSource extends AbstractSource implements EventDrive
     		RabbitMQUtil.close(consumer.getConnection(), consumer.getChannel());      
         super.stop();
     }
+
+    final static int MAX_BODY_SIZE = 1024 * 1024 * 4;
+    
+    static byte[] maybeTruncate(String contentType, byte[] body) {
+    	return maybeTruncate(contentType, body, MAX_BODY_SIZE);
+    }
+    
+    static byte[] maybeTruncate(String contentType, byte[] body, int maxLength) {
+    	if (body.length <= maxLength) {
+    		return body;
+    	}
+    	if ("text/plain".equals(contentType)) {
+    		CharBuffer input = CharBuffer.allocate(maxLength);
+    		CharsetDecoder d = Charsets.UTF_8.newDecoder();
+    		d.onMalformedInput(CodingErrorAction.IGNORE);
+    		d.decode(ByteBuffer.wrap(body), input, true);
+    		d.flush(input);
+    		ByteBuffer bb = ByteBuffer.allocate(maxLength);
+    		input.position(0);
+    		CharsetEncoder e = Charsets.UTF_8.newEncoder();
+    		e.onMalformedInput(CodingErrorAction.IGNORE);
+    		e.encode(input, bb, true);
+    		return bb.array();
+    	}
+    	else {
+    		return new byte[0];
+    	}
+    }
     
     private abstract static class MyConsumer {
     	private final String queueName;
@@ -99,8 +133,12 @@ public class RabbitMQConsumerSource extends AbstractSource implements EventDrive
 						BasicProperties properties,
 						byte[] body) throws IOException {
 					Map<String, String> props = RabbitMQUtil.getHeaders(properties);
+					byte[] b = maybeTruncate(properties.getContentType(), body);
+					if (b.length != body.length) {
+						log.error("Truncated message of size: {}, with props: {}", body.length, props);
+					}
 					Event event = new SimpleEvent();
-					event.setBody(body);
+					event.setBody(b);
 					event.setHeaders(props);
 					handleEvent(event);
 					long tag = envelope.getDeliveryTag();
